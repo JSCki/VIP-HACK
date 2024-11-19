@@ -1,0 +1,256 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Display</title>
+    <style>
+        /* Body styling */
+        body {
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #0d0d0d;
+            color: #00ff00;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Main container styling */
+        .container {
+            width: 500px;
+            background: #101010;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 0 15px #00ff00;
+        }
+
+        /* Header styling */
+        h1 {
+            font-size: 1.8em;
+            color: #00ff00;
+            margin-bottom: 15px;
+        }
+
+        /* Box styling */
+        .box {
+            background: #121212;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 8px;
+            margin: 15px 0;
+            color: #00ff00;
+            font-size: 1.1em;
+            text-shadow: 0 0 5px #00ff00;
+        }
+
+        /* Period, result, and timer boxes */
+        .box .label {
+            font-weight: bold;
+            color: #00ff00;
+            margin-bottom: 5px;
+        }
+
+        .box.result-update {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                background: #00ff0010;
+            }
+        }
+
+        /* Timer styling */
+        #timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        /* History box styling */
+        .history-box {
+            background: #121212;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 8px;
+            margin-top: 20px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+            background: #101010;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            color: #00ff00;
+            font-weight: bold;
+            border: 1px solid #00ff00;
+        }
+
+        /* Button styling */
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 1em;
+            color: #0d0d0d;
+            background-color: #00ff00;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        .button:hover {
+            background-color: #009900;
+            transform: scale(1.05);
+        }
+
+        /* Scrollbar styling */
+        .history-box::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .history-box::-webkit-scrollbar-thumb {
+            background: #00ff00;
+            border-radius: 4px;
+        }
+
+        .history-box::-webkit-scrollbar-track {
+            background: #101010;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>30-Second WINGO Server</h1>
+
+    <!-- Period number box -->
+    <div class="box">
+        <div class="label">Period Number</div>
+        <div id="periodNumber">Loading...</div>
+    </div>
+
+    <!-- Current result box -->
+    <div class="box result-update" id="currentResultContainer">
+        <div class="label">Current Result</div>
+        <div id="currentResult">Waiting...</div>
+    </div>
+
+    <!-- Timer box -->
+    <div class="box">
+        <div class="label">Timer</div>
+        <div id="timer">00:30</div>
+    </div>
+
+    <!-- History box -->
+    <div class="history-box">
+        <div class="label">History</div>
+        <ul id="history" class="history-list"></ul>
+    </div>
+
+    <!-- Action buttons -->
+    <button class="button" onclick="clearHistory()">Clear History</button>
+    <button class="button" onclick="refreshResults()">Refresh Results</button>
+</div>
+
+<script>
+    const periodNumberElement = document.getElementById('periodNumber');
+    const timerElement = document.getElementById('timer');
+    const currentResultElement = document.getElementById('currentResult');
+    const currentResultContainer = document.getElementById('currentResultContainer');
+    const historyElement = document.getElementById('history');
+
+    const results = [
+        'BIG', 'SMALL', 'SMALL', 'BIG', 'SMALL', 'SMALL', 'BIG', 'BIG', 'SMALL', 'SMALL',
+        'SMALL', 'SMALL', 'BIG', 'BIG', 'BIG', 'SMALL', 'SMALL', 'BIG', 'BIG', 'BIG',
+        'SMALL', 'BIG', 'BIG', 'BIG', 'BIG', 'BIG', 'BIG', 'SMALL', 'SMALL', 'BIG',
+        'SMALL', 'SMALL', 'SMALL', 'BIG', 'SMALL', 'SMALL', 'SMALL', 'SMALL', 'SMALL', 'SMALL',
+        'BIG', 'BIG'
+    ];
+
+    let lastDisplayedPeriod = -1;
+    let firstPeriodDisplayed = false;
+    let resultIndex = 0;
+
+    function updatePeriodAndResult() {
+        const now = new Date();
+        const utcYear = now.getUTCFullYear();
+        const utcMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const utcDay = String(now.getUTCDate()).padStart(2, '0');
+        const utcHours = now.getUTCHours();
+        const utcMinutes = now.getUTCMinutes();
+        const seconds = now.getUTCSeconds();
+
+        const remainingSeconds = 30 - (seconds % 30);
+        const totalMinutes = utcHours * 60 + utcMinutes;
+        const periodNumber = 10001 + totalMinutes * 2 + (seconds >= 30 ? 1 : 0);
+
+        const periodString = `${utcYear}${utcMonth}${utcDay}30${periodNumber}`;
+        periodNumberElement.textContent = periodString;
+
+        if (periodNumber !== lastDisplayedPeriod) {
+            lastDisplayedPeriod = periodNumber;
+
+            if (firstPeriodDisplayed) {
+                const result = results[resultIndex];
+                currentResultElement.textContent = result;
+                currentResultContainer.classList.remove('result-update');
+                void currentResultContainer.offsetWidth;
+                currentResultContainer.classList.add('result-update');
+
+                const historyItem = document.createElement('li');
+                historyItem.className = 'history-item';
+
+                const periodDiv = document.createElement('span');
+                periodDiv.textContent = periodString;
+
+                const resultDiv = document.createElement('span');
+                resultDiv.textContent = result;
+
+                historyItem.appendChild(periodDiv);
+                historyItem.appendChild(resultDiv);
+                historyElement.prepend(historyItem);
+
+                resultIndex = (resultIndex + 1) % results.length;
+            } else {
+                firstPeriodDisplayed = true;
+            }
+        }
+
+        const formattedTime = String(remainingSeconds).padStart(2, '0');
+        timerElement.textContent = `00:${formattedTime}`;
+    }
+
+    function clearHistory() {
+        historyElement.innerHTML = '';
+    }
+
+    function refreshResults() {
+        resultIndex = 0;
+        clearHistory();
+        firstPeriodDisplayed = false;
+        currentResultElement.textContent = "Waiting...";
+    }
+
+    setInterval(updatePeriodAndResult, 1000);
+</script>
+
+
+
+</body></html>
